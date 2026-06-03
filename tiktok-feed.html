@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>動画フィード</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#000;font-family:'Helvetica Neue','Hiragino Sans',sans-serif;overflow:hidden;height:100vh;height:100dvh;user-select:none;-webkit-user-select:none;}
+#app{position:relative;width:100vw;height:100vh;height:100dvh;overflow:hidden;background:#000;}
+#feed-wrap{position:relative;width:100%;height:100%;}
+.v-slide{position:absolute;top:0;left:0;width:100%;height:100%;background:#111;overflow:hidden;}
+.v-slide video{width:100%;height:100%;object-fit:cover;display:block;}
+.v-overlay{position:absolute;bottom:max(90px,env(safe-area-inset-bottom,0px)+70px);left:20px;z-index:5;pointer-events:none;display:flex;flex-direction:column;gap:4px;}
+.v-idx{color:rgba(255,255,255,.4);font-size:11px;font-weight:600;letter-spacing:.08em;}
+.v-title{color:#fff;font-size:15px;font-weight:600;text-shadow:0 1px 8px rgba(0,0,0,.9);}
+.tap-ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:8;background:rgba(0,0,0,.5);}
+.tap-circle{width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;font-size:28px;padding-left:5px;}
+.tap-label{color:rgba(255,255,255,.85);font-size:14px;font-weight:600;}
+.black-ov{position:absolute;inset:0;background:#000;z-index:10;}
+.pause-flash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:8;pointer-events:none;font-size:60px;animation:pf .6s forwards;}
+@keyframes pf{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.4)}}
+#indicators{position:fixed;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:20;}
+.dot{width:4px;height:4px;border-radius:2px;background:rgba(255,255,255,.3);transition:all .3s;}
+.dot.active{height:20px;background:#fff;}
+#empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,.45);gap:14px;}
+#empty-state .ei{font-size:54px;}
+#empty-state .em{font-size:15px;text-align:center;line-height:1.6;padding:0 24px;}
+/* ローディング画面 */
+#loading-screen{position:fixed;inset:0;background:#000;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+#loading-screen .ls-icon{font-size:44px;}
+#loading-screen .ls-text{color:rgba(255,255,255,.7);font-size:14px;}
+#loading-screen .ls-bar-wrap{width:200px;height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;}
+#loading-screen .ls-bar{height:100%;background:#fff;border-radius:2px;width:0%;transition:width .3s;}
+/* DEVボタン */
+#dev-btn{position:fixed;top:max(16px,env(safe-area-inset-top,0px)+8px);right:16px;z-index:30;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;letter-spacing:.08em;padding:6px 14px;border-radius:20px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+/* DEVパネル */
+#dev-panel{position:fixed;top:0;right:0;width:min(320px,100vw);height:100vh;height:100dvh;background:#0e0e14;border-left:1px solid rgba(255,255,255,.08);z-index:50;overflow-y:auto;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;}
+#dev-panel.open{transform:translateX(0);}
+.dh{display:flex;align-items:center;gap:10px;padding:max(18px,env(safe-area-inset-top,0px)+10px) 16px 14px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;}
+.db{background:#e63946;color:#fff;font-size:10px;font-weight:800;letter-spacing:.1em;padding:3px 7px;border-radius:4px;}
+.dt{color:#fff;font-size:14px;font-weight:600;flex:1;}
+.xbtn{background:none;border:none;color:rgba(255,255,255,.4);font-size:20px;cursor:pointer;padding:4px;line-height:1;-webkit-tap-highlight-color:transparent;}
+.tabs{display:flex;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;}
+.tbtn{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,.4);font-size:11px;font-weight:600;padding:10px 4px;cursor:pointer;transition:color .2s,border-color .2s;-webkit-tap-highlight-color:transparent;}
+.tbtn.on{color:#fff;border-bottom-color:#fff;}
+.tcon{display:none;padding:16px;}
+.tcon.on{display:block;}
+.slabel{color:rgba(255,255,255,.45);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;}
+.cbadge{background:rgba(255,255,255,.12);color:rgba(255,255,255,.55);font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px;}
+.dempty{color:rgba(255,255,255,.25);font-size:12px;text-align:center;padding:20px 0;}
+/* ストレージ使用量 */
+.storage-bar-wrap{height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-bottom:6px;}
+.storage-bar{height:100%;background:#4ade80;border-radius:2px;transition:width .4s;}
+.storage-text{color:rgba(255,255,255,.35);font-size:10px;margin-bottom:14px;}
+/* 追加エリア */
+.dz{border:2px dashed rgba(255,255,255,.14);border-radius:10px;background:rgba(255,255,255,.03);padding:20px 12px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:border-color .2s,background .2s;margin-bottom:8px;-webkit-tap-highlight-color:transparent;}
+.dz:active,.dz.drag{border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.07);}
+.dz-icon{font-size:30px;}.dz-text{color:rgba(255,255,255,.65);font-size:12px;font-weight:500;text-align:center;line-height:1.5;}.dz-sub{color:rgba(255,255,255,.28);font-size:10px;}
+#queue-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.q-item{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border-radius:8px;padding:8px;}
+.q-item video{width:64px;height:44px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+.q-title-input{flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:6px 8px;color:#fff;font-size:11px;outline:none;min-width:0;}
+.q-title-input:focus{border-color:rgba(255,255,255,.3);}
+.q-del{background:none;border:none;color:rgba(255,255,255,.35);font-size:18px;cursor:pointer;flex-shrink:0;padding:4px;-webkit-tap-highlight-color:transparent;}
+.saving-badge{display:inline-block;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);color:#4ade80;font-size:9px;padding:2px 6px;border-radius:10px;margin-left:6px;vertical-align:middle;}
+.add-all-btn{width:100%;padding:12px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.08);color:rgba(255,255,255,.35);transition:background .2s,color .2s;margin-bottom:16px;-webkit-tap-highlight-color:transparent;}
+.add-all-btn.ready{background:#fff;color:#000;}.add-all-btn.done{background:#4ade80;color:#000;}
+.vli{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border-radius:8px;padding:8px;margin-bottom:6px;}
+.vli-thumb{width:48px;height:34px;object-fit:cover;border-radius:5px;flex-shrink:0;background:#222;}
+.vli-info{flex:1;min-width:0;}
+.vli-name{color:#ccc;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.vli-sub{color:rgba(255,255,255,.28);font-size:10px;margin-top:2px;}
+.vli-act{display:flex;gap:3px;flex-shrink:0;}
+.abtn{background:rgba(255,255,255,.07);border:none;color:rgba(255,255,255,.45);width:28px;height:28px;border-radius:4px;cursor:pointer;font-size:11px;-webkit-tap-highlight-color:transparent;}
+.abtn:active:not(:disabled){background:rgba(255,255,255,.2);}
+.abtn:disabled{opacity:.2;cursor:default;}
+.dbtn{background:rgba(230,57,70,.12);border:1px solid rgba(230,57,70,.3);color:#e63946;font-size:10px;padding:4px 8px;border-radius:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.dbtn:active{background:rgba(230,57,70,.28);}
+.log-table{display:flex;flex-direction:column;gap:4px;}
+.log-row{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:8px 10px;border-radius:6px;background:rgba(255,255,255,.04);color:#ccc;}
+.log-head{background:rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-weight:700;font-size:10px;}
+.log-summary{margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:12px;display:flex;flex-direction:column;gap:6px;}
+.log-sum-row{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:#fff;padding:4px 0;}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;}
+.tlabel{color:#e0e0e0;font-size:13px;font-weight:600;}.tsub{color:rgba(255,255,255,.35);font-size:11px;margin-top:3px;line-height:1.4;}
+.tgl{width:48px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;flex-shrink:0;background:rgba(255,255,255,.14);transition:background .25s;-webkit-tap-highlight-color:transparent;}
+.tgl.on{background:#4ade80;}
+.tgl-k{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .25s;box-shadow:0 1px 4px rgba(0,0,0,.3);}
+.tgl.on .tgl-k{left:23px;}
+.guide{display:flex;flex-direction:column;gap:7px;color:rgba(255,255,255,.4);font-size:12px;line-height:1.6;}
+.clear-btn{width:100%;margin-top:20px;padding:10px;border-radius:8px;border:1px solid rgba(230,57,70,.3);background:rgba(230,57,70,.08);color:#e63946;font-size:12px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+</style>
+</head>
+<body>
+
+<!-- ローディング画面 -->
+<div id="loading-screen">
+  <div class="ls-icon">🎬</div>
+  <div class="ls-text">動画を読み込み中...</div>
+  <div class="ls-bar-wrap"><div class="ls-bar" id="ls-bar"></div></div>
+</div>
+
+<div id="app">
+  <div id="empty-state" style="display:none">
+    <div class="ei">🎬</div>
+    <div class="em">DEVパネルから動画を追加してください<br><span style="font-size:12px;color:rgba(255,255,255,.3)">追加した動画はこの端末に保存されます</span></div>
+  </div>
+  <div id="feed-wrap"></div>
+  <div id="indicators"></div>
+  <button id="dev-btn">DEV</button>
+</div>
+
+<div id="dev-panel">
+  <div class="dh">
+    <span class="db">DEV</span>
+    <span class="dt">開発者設定</span>
+    <button class="xbtn" id="dev-close">✕</button>
+  </div>
+  <div class="tabs">
+    <button class="tbtn on" data-tab="videos">📋 動画管理</button>
+    <button class="tbtn" data-tab="watch">⏱ 視聴ログ</button>
+    <button class="tbtn" data-tab="settings">⚙️ 設定</button>
+  </div>
+  <div class="tcon on" id="tab-videos">
+    <div class="slabel">動画を追加（複数可）</div>
+    <div class="dz" id="drop-zone">
+      <div class="dz-icon">🎬</div>
+      <div class="dz-text">ここに動画をドロップ<br>またはタップして選択</div>
+      <div class="dz-sub">MP4 / MOV / WebM・複数選択OK</div>
+    </div>
+    <div id="queue-list"></div>
+    <button class="add-all-btn" id="add-all-btn">＋ 動画を選択</button>
+    <div class="slabel">
+      登録済み動画 <span class="cbadge" id="vcnt">0</span>
+      <span class="saving-badge">📱 端末に保存中</span>
+    </div>
+    <div class="storage-bar-wrap"><div class="storage-bar" id="storage-bar"></div></div>
+    <div class="storage-text" id="storage-text">ストレージ使用量: 計算中...</div>
+    <div id="video-list"></div>
+  </div>
+  <div class="tcon" id="tab-watch">
+    <div class="slabel" style="margin-bottom:12px">視聴時間ログ</div>
+    <div id="watch-log"></div>
+  </div>
+  <div class="tcon" id="tab-settings">
+    <div class="slabel" style="margin-bottom:16px">再生設定</div>
+    <div class="toggle-row">
+      <div><div class="tlabel">遷移時 黒画面（1秒）</div><div class="tsub">動画開始前に1秒の暗転を挿入する</div></div>
+      <button class="tgl" id="black-tgl"><span class="tgl-k"></span></button>
+    </div>
+    <div class="slabel" style="margin-bottom:12px">操作ガイド</div>
+    <div class="guide">
+      <div>📱 上スワイプ → 次の動画</div>
+      <div>📱 下スワイプ → 前の動画</div>
+      <div>👆 画面タップ → 一時停止 / 再生</div>
+    </div>
+    <button class="clear-btn" id="clear-btn">⚠️ 保存データをすべて削除</button>
+  </div>
+</div>
+
+<input type="file" id="file-input" accept="video/*" multiple style="display:none">
+
+<script>
+// ══════════════════════════════════════════
+// IndexedDB
+// ══════════════════════════════════════════
+const DB_NAME = 'video-feed-db';
+const DB_VER  = 1;
+const STORE   = 'videos';
+let db = null;
+
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE)) {
+        d.createObjectStore(STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+function dbGetAll() {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+function dbPut(record) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).put(record);
+    req.onsuccess = () => res();
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+function dbDelete(id) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).delete(id);
+    req.onsuccess = () => res();
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+function dbClear() {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const req = tx.objectStore(STORE).clear();
+    req.onsuccess = () => res();
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+// ══════════════════════════════════════════
+// 状態
+// ══════════════════════════════════════════
+let videos        = [];    // { id, title, src(objectURL), order, size }
+let queue         = [];    // 追加待ち { qid, title, src, blob }
+let cur           = 0;
+let blackScreen   = false;
+let globalStarted = false;
+let isTrans       = false;
+let watchLog      = [];
+let watchStart    = null;
+let watchVideoId  = null;
+let nextId        = Date.now(); // ユニークID
+
+const SLOTS = ['prev','cur','next'];
+let slides  = {};
+
+const fmt = ms => {
+  const t = Math.floor(ms/1000);
+  const h = Math.floor(t/3600);
+  const m = Math.floor((t%3600)/60);
+  const s = t%60;
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+};
+const fmtSize = b => b > 1e9 ? (b/1e9).toFixed(1)+'GB' : b > 1e6 ? (b/1e6).toFixed(1)+'MB' : (b/1e3).toFixed(0)+'KB';
+
+// ══════════════════════════════════════════
+// DOM
+// ══════════════════════════════════════════
+const appEl      = document.getElementById('app');
+const feedWrap   = document.getElementById('feed-wrap');
+const emptyEl    = document.getElementById('empty-state');
+const indEl      = document.getElementById('indicators');
+const devBtn     = document.getElementById('dev-btn');
+const devPanel   = document.getElementById('dev-panel');
+const devClose   = document.getElementById('dev-close');
+const dropZone   = document.getElementById('drop-zone');
+const queueList  = document.getElementById('queue-list');
+const addAllBtn  = document.getElementById('add-all-btn');
+const fileInput  = document.getElementById('file-input');
+const videoList  = document.getElementById('video-list');
+const vcnt       = document.getElementById('vcnt');
+const watchLogEl = document.getElementById('watch-log');
+const blackTgl   = document.getElementById('black-tgl');
+const lsBar      = document.getElementById('ls-bar');
+const loadingSc  = document.getElementById('loading-screen');
+const storageBar = document.getElementById('storage-bar');
+const storageText= document.getElementById('storage-text');
+
+// ══════════════════════════════════════════
+// 3スライド初期化
+// ══════════════════════════════════════════
+function makeSlide() {
+  const el = document.createElement('div');
+  el.className = 'v-slide';
+  el.style.visibility = 'hidden';
+
+  const vid = document.createElement('video');
+  vid.loop = true; vid.muted = false;
+  vid.setAttribute('playsinline','');
+  vid.setAttribute('webkit-playsinline','');
+  el.appendChild(vid);
+
+  const blackEl = document.createElement('div');
+  blackEl.className = 'black-ov';
+  blackEl.style.display = 'none';
+  el.appendChild(blackEl);
+
+  const tapEl = document.createElement('div');
+  tapEl.className = 'tap-ov';
+  tapEl.style.display = 'none';
+  tapEl.innerHTML = '<div class="tap-circle">▶</div><div class="tap-label">タップして再生</div>';
+  el.appendChild(tapEl);
+
+  const ovEl = document.createElement('div');
+  ovEl.className = 'v-overlay';
+  el.appendChild(ovEl);
+
+  el.addEventListener('click', () => {
+    if (devPanel.classList.contains('open')) return;
+    onSlideTap();
+  });
+
+  feedWrap.appendChild(el);
+  return { el, vid, blackEl, tapEl, ovEl };
+}
+
+SLOTS.forEach(s => { slides[s] = makeSlide(); });
+
+// ══════════════════════════════════════════
+// フィード描画
+// ══════════════════════════════════════════
+function posY(offset) { return `translateY(${offset * 100}vh)`; }
+
+function refreshSlides() {
+  if (videos.length === 0) {
+    emptyEl.style.display = 'flex';
+    SLOTS.forEach(s => slides[s].el.style.visibility = 'hidden');
+    indEl.innerHTML = '';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  // インジケーター
+  if (indEl.children.length !== videos.length) {
+    indEl.innerHTML = '';
+    videos.forEach(() => {
+      const d = document.createElement('div'); d.className = 'dot';
+      indEl.appendChild(d);
+    });
+  }
+  [...indEl.children].forEach((d,i) => d.className = 'dot'+(i===cur?' active':''));
+
+  const map = { prev: cur-1, cur: cur, next: cur+1 };
+  SLOTS.forEach(slot => {
+    const idx = map[slot];
+    const s   = slides[slot];
+    if (idx < 0 || idx >= videos.length) {
+      if (s.vid.src) { s.vid.pause(); s.vid.removeAttribute('src'); s.vid.load(); }
+      s.el.style.visibility = 'hidden';
+      return;
+    }
+    const v = videos[idx];
+    s.el.style.visibility = 'visible';
+    if (s.vid.dataset.vid !== String(v.id)) {
+      s.vid.pause();
+      s.vid.src = v.src;
+      s.vid.dataset.vid = v.id;
+      s.vid.load();
+    }
+    s.ovEl.innerHTML = `<span class="v-idx">#${idx+1}</span><span class="v-title">${v.title}</span>`;
+    s.el.style.transition = 'none';
+    s.el.style.transform  = posY(idx - cur);
+    if (slot === 'cur') {
+      s.tapEl.style.display  = globalStarted ? 'none' : 'flex';
+      s.blackEl.style.display = 'none';
+    } else {
+      s.tapEl.style.display  = 'none';
+      s.blackEl.style.display = 'none';
+      s.vid.pause();
+    }
+  });
+}
+
+// ══════════════════════════════════════════
+// 再生制御
+// ══════════════════════════════════════════
+function doPlay(vid) {
+  const p = vid.play();
+  if (p) p.catch(() => {});
+}
+
+function startCurrent() {
+  const s   = slides['cur'];
+  const vid = s.vid;
+  saveWatch();
+  if (blackScreen) {
+    s.blackEl.style.display = 'block';
+    vid.pause(); vid.currentTime = 0;
+    setTimeout(() => {
+      s.blackEl.style.display = 'none';
+      doPlay(vid); beginWatch();
+    }, 1000);
+  } else {
+    vid.currentTime = 0;
+    doPlay(vid); beginWatch();
+  }
+}
+
+function beginWatch() {
+  watchStart   = Date.now();
+  watchVideoId = videos[cur]?.id ?? null;
+}
+
+function saveWatch() {
+  if (watchStart !== null && watchVideoId !== null) {
+    const ms = Date.now() - watchStart;
+    if (ms > 500) {
+      const v = videos.find(v => v.id === watchVideoId);
+      watchLog.push({ id: watchVideoId, title: v?.title || `#${watchVideoId}`, ms });
+    }
+  }
+  watchStart = null; watchVideoId = null;
+}
+
+function onSlideTap() {
+  const s = slides['cur'];
+  if (!globalStarted) {
+    globalStarted = true;
+    s.tapEl.style.display = 'none';
+    startCurrent();
+    return;
+  }
+  const vid = s.vid;
+  if (vid.paused) {
+    doPlay(vid); beginWatch();
+  } else {
+    vid.pause(); saveWatch();
+    const f = document.createElement('div');
+    f.className = 'pause-flash'; f.textContent = '⏸';
+    s.el.appendChild(f);
+    setTimeout(() => f.remove(), 700);
+  }
+}
+
+// ══════════════════════════════════════════
+// ナビゲーション
+// ══════════════════════════════════════════
+function goTo(newIdx) {
+  if (isTrans || newIdx < 0 || newIdx >= videos.length) return;
+  isTrans = true;
+  saveWatch();
+  slides['cur'].vid.pause();
+  cur = newIdx;
+
+  const map = { prev: cur-1, cur: cur, next: cur+1 };
+  SLOTS.forEach(slot => {
+    const idx = map[slot];
+    const s   = slides[slot];
+    if (idx < 0 || idx >= videos.length) {
+      s.el.style.visibility = 'hidden'; return;
+    }
+    const v = videos[idx];
+    s.el.style.visibility = 'visible';
+    if (s.vid.dataset.vid !== String(v.id)) {
+      s.vid.pause(); s.vid.src = v.src;
+      s.vid.dataset.vid = v.id; s.vid.load();
+    }
+    s.ovEl.innerHTML = `<span class="v-idx">#${idx+1}</span><span class="v-title">${v.title}</span>`;
+    s.el.style.transition = 'none';
+    s.el.style.transform  = posY(idx - cur);
+    s.tapEl.style.display  = 'none';
+    s.blackEl.style.display = 'none';
+    if (slot !== 'cur') s.vid.pause();
+  });
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    [...indEl.children].forEach((d,i) => d.className = 'dot'+(i===cur?' active':''));
+    if (globalStarted) startCurrent();
+    setTimeout(() => { isTrans = false; }, 400);
+  }));
+}
+
+// ══════════════════════════════════════════
+// タッチ / スワイプ
+// ══════════════════════════════════════════
+let ty = null, tx2 = null;
+appEl.addEventListener('touchstart', e => {
+  ty = e.touches[0].clientY;
+  tx2 = e.touches[0].clientX;
+}, { passive: true });
+appEl.addEventListener('touchend', e => {
+  if (ty === null) return;
+  const dy = ty - e.changedTouches[0].clientY;
+  const dx = tx2 - e.changedTouches[0].clientX;
+  // 縦スワイプのみ（横スワイプは無視してDEVパネルを妨げない）
+  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 40) {
+    dy > 0 ? goTo(cur+1) : goTo(cur-1);
+  }
+  ty = null; tx2 = null;
+}, { passive: true });
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp') goTo(cur+1);
+  if (e.key === 'ArrowDown') goTo(cur-1);
+});
+
+// ══════════════════════════════════════════
+// DEVパネル
+// ══════════════════════════════════════════
+devBtn.addEventListener('click', () => devPanel.classList.add('open'));
+devClose.addEventListener('click', () => devPanel.classList.remove('open'));
+
+document.querySelectorAll('.tbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tbtn').forEach(b => b.classList.remove('on'));
+    document.querySelectorAll('.tcon').forEach(c => c.classList.remove('on'));
+    btn.classList.add('on');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('on');
+    if (btn.dataset.tab === 'watch') renderWatchLog();
+  });
+});
+
+blackTgl.addEventListener('click', () => {
+  blackScreen = !blackScreen;
+  blackTgl.classList.toggle('on', blackScreen);
+});
+
+document.getElementById('clear-btn').addEventListener('click', async () => {
+  if (!confirm('保存されているすべての動画データを削除しますか？')) return;
+  // ObjectURLを解放
+  videos.forEach(v => URL.revokeObjectURL(v.src));
+  videos = []; cur = 0; globalStarted = false;
+  SLOTS.forEach(s => { slides[s].vid.dataset.vid = ''; });
+  await dbClear();
+  refreshSlides();
+  renderVideoList();
+  updateStorageInfo();
+});
+
+// ══════════════════════════════════════════
+// ファイル選択・キュー
+// ══════════════════════════════════════════
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag');
+  addFilesToQueue([...e.dataTransfer.files]);
+});
+fileInput.addEventListener('change', e => {
+  addFilesToQueue([...e.target.files]);
+  fileInput.value = '';
+});
+
+function addFilesToQueue(files) {
+  files.filter(f => f.type.startsWith('video/')).forEach(f => {
+    queue.push({
+      qid:   nextId++,
+      title: f.name.replace(/\.[^.]+$/, ''),
+      src:   URL.createObjectURL(f),
+      blob:  f,
+      size:  f.size,
+    });
+  });
+  renderQueue();
+}
+
+function renderQueue() {
+  queueList.innerHTML = '';
+  queue.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'q-item';
+    const vid = document.createElement('video');
+    vid.src = item.src; vid.muted = true; vid.setAttribute('playsinline','');
+    row.appendChild(vid);
+    const inp = document.createElement('input');
+    inp.className = 'q-title-input'; inp.value = item.title;
+    inp.addEventListener('input', () => { queue[i].title = inp.value; });
+    row.appendChild(inp);
+    const del = document.createElement('button');
+    del.className = 'q-del'; del.textContent = '✕';
+    del.addEventListener('click', () => { queue.splice(i,1); renderQueue(); });
+    row.appendChild(del);
+    queueList.appendChild(row);
+  });
+  if (queue.length > 0) {
+    addAllBtn.textContent = `フィードに追加（${queue.length}本）`;
+    addAllBtn.className = 'add-all-btn ready';
+  } else {
+    addAllBtn.textContent = '＋ 動画を選択';
+    addAllBtn.className = 'add-all-btn';
+  }
+}
+
+addAllBtn.addEventListener('click', async () => {
+  if (queue.length === 0) { fileInput.click(); return; }
+  addAllBtn.textContent = '保存中...';
+  addAllBtn.className = 'add-all-btn';
+  addAllBtn.disabled = true;
+
+  for (const item of queue) {
+    const id = nextId++;
+    const record = {
+      id,
+      title: item.title,
+      order: videos.length,
+      size:  item.size,
+      blob:  item.blob,
+    };
+    await dbPut(record);
+    const src = URL.createObjectURL(item.blob);
+    videos.push({ id, title: item.title, src, order: record.order, size: item.size });
+  }
+  queue = [];
+  renderQueue();
+  addAllBtn.textContent = '✓ 追加しました！';
+  addAllBtn.className = 'add-all-btn done';
+  addAllBtn.disabled = false;
+  setTimeout(() => {
+    addAllBtn.textContent = '＋ 動画を選択';
+    addAllBtn.className = 'add-all-btn';
+  }, 2000);
+  refreshSlides();
+  renderVideoList();
+  updateStorageInfo();
+});
+
+// ══════════════════════════════════════════
+// 動画リスト
+// ══════════════════════════════════════════
+function renderVideoList() {
+  vcnt.textContent = videos.length;
+  videoList.innerHTML = '';
+  videos.forEach((v, i) => {
+    const row = document.createElement('div');
+    row.className = 'vli';
+
+    const thumb = document.createElement('video');
+    thumb.className = 'vli-thumb'; thumb.src = v.src;
+    thumb.muted = true; thumb.setAttribute('playsinline','');
+    row.appendChild(thumb);
+
+    const info = document.createElement('div');
+    info.className = 'vli-info';
+    info.innerHTML = `<div class="vli-name">${v.title}</div><div class="vli-sub">${fmtSize(v.size||0)}</div>`;
+    row.appendChild(info);
+
+    const act = document.createElement('div'); act.className = 'vli-act';
+    const up = document.createElement('button');
+    up.className='abtn'; up.textContent='▲'; up.disabled=i===0;
+    up.addEventListener('click', () => moveVideo(i, i-1));
+    const dn = document.createElement('button');
+    dn.className='abtn'; dn.textContent='▼'; dn.disabled=i===videos.length-1;
+    dn.addEventListener('click', () => moveVideo(i, i+1));
+    const dl = document.createElement('button');
+    dl.className='dbtn'; dl.textContent='削除';
+    dl.addEventListener('click', () => deleteVideo(v.id));
+    act.append(up, dn, dl);
+    row.appendChild(act);
+    videoList.appendChild(row);
+  });
+}
+
+async function moveVideo(from, to) {
+  if (to < 0 || to >= videos.length) return;
+  [videos[from], videos[to]] = [videos[to], videos[from]];
+  // order更新
+  for (let i = 0; i < videos.length; i++) {
+    videos[i].order = i;
+    const rec = await getDBRecord(videos[i].id);
+    if (rec) { rec.order = i; await dbPut(rec); }
+  }
+  if (cur === from) cur = to;
+  else if (cur === to) cur = from;
+  SLOTS.forEach(s => { slides[s].vid.dataset.vid = ''; });
+  refreshSlides();
+  renderVideoList();
+}
+
+function getDBRecord(id) {
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).get(id);
+    req.onsuccess = e => res(e.target.result);
+    req.onerror   = e => rej(e.target.error);
+  });
+}
+
+async function deleteVideo(id) {
+  const idx = videos.findIndex(v => v.id === id);
+  if (idx === -1) return;
+  URL.revokeObjectURL(videos[idx].src);
+  videos.splice(idx, 1);
+  await dbDelete(id);
+  if (cur >= videos.length) cur = Math.max(0, videos.length-1);
+  SLOTS.forEach(s => { slides[s].vid.dataset.vid = ''; });
+  refreshSlides();
+  renderVideoList();
+  updateStorageInfo();
+}
+
+// ══════════════════════════════════════════
+// ストレージ使用量
+// ══════════════════════════════════════════
+async function updateStorageInfo() {
+  const totalBytes = videos.reduce((a, v) => a + (v.size||0), 0);
+  let pct = 0;
+  if (navigator.storage && navigator.storage.estimate) {
+    try {
+      const est = await navigator.storage.estimate();
+      pct = Math.min(100, (est.usage / est.quota) * 100);
+      const used = fmtSize(est.usage||0);
+      const quota = fmtSize(est.quota||0);
+      storageText.textContent = `ストレージ: ${used} / ${quota} 使用中`;
+    } catch { storageText.textContent = `動画合計: ${fmtSize(totalBytes)}`; }
+  } else {
+    storageText.textContent = `動画合計: ${fmtSize(totalBytes)}`;
+  }
+  storageBar.style.width = pct + '%';
+  storageBar.style.background = pct > 80 ? '#f87171' : pct > 60 ? '#fbbf24' : '#4ade80';
+}
+
+// ══════════════════════════════════════════
+// 視聴ログ
+// ══════════════════════════════════════════
+function renderWatchLog() {
+  if (!watchLog.length) {
+    watchLogEl.innerHTML = '<div class="dempty">まだデータがありません</div>';
+    return;
+  }
+  const totalMs   = watchLog.reduce((a,e) => a+e.ms, 0);
+  const uniqueIds = new Set(watchLog.map(e => e.id)).size;
+  let h = '<div class="log-table"><div class="log-row log-head"><span>動画名</span><span>視聴時間</span></div>';
+  watchLog.forEach(e => {
+    h += `<div class="log-row"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:170px">${e.title}</span><span style="flex-shrink:0">${fmt(e.ms)}</span></div>`;
+  });
+  h += `</div><div class="log-summary"><div class="log-sum-row"><span>総動画視聴時間</span><span>${fmt(totalMs)}</span></div><div class="log-sum-row"><span>視聴動画数</span><span>${uniqueIds}</span></div></div>`;
+  watchLogEl.innerHTML = h;
+}
+
+// ══════════════════════════════════════════
+// 起動：IndexedDBから動画を復元
+// ══════════════════════════════════════════
+async function init() {
+  await openDB();
+  const records = await dbGetAll();
+  // orderでソート
+  records.sort((a,b) => (a.order||0) - (b.order||0));
+
+  const total = records.length;
+  for (let i = 0; i < total; i++) {
+    const rec = records[i];
+    // blobからObjectURLを再生成
+    const src = URL.createObjectURL(rec.blob);
+    videos.push({ id: rec.id, title: rec.title, src, order: rec.order||i, size: rec.size||0 });
+    // プログレスバー更新
+    lsBar.style.width = Math.round(((i+1)/total)*100) + '%';
+    // UIがフリーズしないよう少し待つ
+    if (i % 3 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+
+  // ローディング画面を消す
+  loadingSc.style.transition = 'opacity .3s';
+  loadingSc.style.opacity = '0';
+  setTimeout(() => { loadingSc.style.display = 'none'; }, 300);
+
+  refreshSlides();
+  renderVideoList();
+  updateStorageInfo();
+}
+
+init().catch(err => {
+  console.error('init error:', err);
+  loadingSc.style.display = 'none';
+  refreshSlides();
+});
+</script>
+</body>
+</html>
