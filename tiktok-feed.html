@@ -33,7 +33,7 @@ body{background:#000;font-family:'Helvetica Neue','Hiragino Sans',sans-serif;ove
 #loading-screen .ls-bar-wrap{width:200px;height:4px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;}
 #loading-screen .ls-bar{height:100%;background:#fff;border-radius:2px;width:0%;transition:width .3s;}
 /* DEVボタン */
-#dev-btn{position:fixed;top:max(16px,env(safe-area-inset-top,0px)+8px);right:16px;z-index:30;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:700;letter-spacing:.08em;padding:6px 14px;border-radius:20px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+#dev-btn{position:fixed;top:20px;right:16px;z-index:9999;background:rgba(40,40,40,.95);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:13px;font-weight:700;letter-spacing:.08em;padding:8px 16px;border-radius:20px;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 2px 12px rgba(0,0,0,.5);}
 /* DEVパネル */
 #dev-panel{position:fixed;top:0;right:0;width:min(320px,100vw);height:100vh;height:100dvh;background:#0e0e14;border-left:1px solid rgba(255,255,255,.08);z-index:50;overflow-y:auto;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease;}
 #dev-panel.open{transform:translateX(0);}
