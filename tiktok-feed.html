@@ -372,6 +372,8 @@ function doPlay(vid) {
   if (p) p.catch(() => {});
 }
 
+let blackScreenCancel = null; // 黒画面をキャンセルするフラグ
+
 function startCurrent() {
   const s   = slides['cur'];
   const vid = s.vid;
@@ -380,12 +382,18 @@ function startCurrent() {
     s.blackEl.style.display = 'block';
     isBlackShowing = true;
     vid.pause(); vid.currentTime = 0;
+
+    // 前の黒画面Promiseをキャンセル
+    const token = {};
+    blackScreenCancel = token;
+
     const waitReady = new Promise(res => {
       if (vid.readyState >= 3) { res(); return; }
       vid.addEventListener('canplay', res, { once: true });
     });
     const wait1sec = new Promise(res => setTimeout(res, 1000));
     Promise.all([waitReady, wait1sec]).then(() => {
+      if (blackScreenCancel !== token) return; // キャンセル済み
       s.blackEl.style.display = 'none';
       isBlackShowing = false;
       doPlay(vid); beginWatch();
@@ -437,8 +445,14 @@ function onSlideTap() {
 // ナビゲーション
 // ══════════════════════════════════════════
 function goTo(newIdx) {
-  if (isTrans || newIdx < 0 || newIdx >= videos.length) return;
+  if (isBlackShowing || isTrans || newIdx < 0 || newIdx >= videos.length) return;
   isTrans = true;
+
+  // 黒画面を強制キャンセル
+  blackScreenCancel = null;
+  isBlackShowing = false;
+  SLOTS.forEach(s => { slides[s].blackEl.style.display = 'none'; });
+
   saveWatch();
   slides['cur'].vid.pause();
   cur = newIdx;
